@@ -1,0 +1,9 @@
+venv/
+dataset/
+models/
+build/
+dist/
+logs/
+__pycache__/
+*.pyc
+*.spec
