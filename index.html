@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VIGIL-88 — Real-Time Urban Threat Detection</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&family=Barlow+Condensed:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #050810;
+    --panel:     #0a0f1e;
+    --card:      #0d1424;
+    --border:    #1a2840;
+    --blue:      #2979ff;
+    --cyan:      #00e5ff;
+    --fire:      #ff3d00;
+    --accident:  #ff8f00;
+    --normal:    #00e676;
+    --text:      #e8edf5;
+    --muted:     #8899aa;
+    --dim:       #3a4a60;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    font-weight: 300;
+    overflow-x: hidden;
+    cursor: crosshair;
+  }
+
+  /* ── SCAN LINE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,229,255,0.012) 2px,
+      rgba(0,229,255,0.012) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── GRID BG ── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(41,121,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(41,121,255,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 48px;
+    height: 64px;
+    background: rgba(5,8,16,0.85);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 18px;
+    color: var(--text);
+    text-decoration: none;
+    letter-spacing: 2px;
+  }
+
+  .nav-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 12px var(--cyan);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.6; }
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 32px;
+    list-style: none;
+  }
+
+  .nav-links a {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-decoration: none;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+
+  .nav-links a:hover { color: var(--cyan); }
+
+  .nav-cta {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--cyan);
+    border: 1px solid var(--cyan);
+    padding: 8px 20px;
+    text-decoration: none;
+    letter-spacing: 2px;
+    transition: all 0.2s;
+  }
+
+  .nav-cta:hover {
+    background: var(--cyan);
+    color: var(--bg);
+  }
+
+  /* ── HERO ── */
+  .hero {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 120px 48px 80px;
+    overflow: hidden;
+  }
+
+  .hero-glow {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 800px;
+    height: 500px;
+    background: radial-gradient(ellipse, rgba(41,121,255,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--cyan);
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    opacity: 0;
+    animation: fade-up 0.6s ease forwards 0.2s;
+  }
+
+  .hero-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(72px, 12vw, 140px);
+    font-weight: 900;
+    line-height: 0.9;
+    letter-spacing: -2px;
+    margin-bottom: 8px;
+    opacity: 0;
+    animation: fade-up 0.6s ease forwards 0.4s;
+  }
+
+  .hero-title .v { color: var(--text); }
+  .hero-title .num {
+    color: transparent;
+    -webkit-text-stroke: 2px var(--cyan);
+    text-shadow: 0 0 40px rgba(0,229,255,0.3);
+  }
+
+  .hero-subtitle {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: clamp(12px, 2vw, 16px);
+    color: var(--muted);
+    letter-spacing: 4px;
+    margin-bottom: 48px;
+    opacity: 0;
+    animation: fade-up 0.6s ease forwards 0.6s;
+  }
+
+  .hero-desc {
+    max-width: 560px;
+    font-size: 16px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 48px;
+    opacity: 0;
+    animation: fade-up 0.6s ease forwards 0.8s;
+  }
+
+  .hero-btns {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    opacity: 0;
+    animation: fade-up 0.6s ease forwards 1s;
+  }
+
+  .btn-primary {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--bg);
+    background: var(--cyan);
+    border: none;
+    padding: 14px 32px;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.4s;
+  }
+
+  .btn-primary:hover::before { left: 100%; }
+  .btn-primary:hover { box-shadow: 0 0 24px rgba(0,229,255,0.5); }
+
+  .btn-secondary {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--text);
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 14px 32px;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--blue);
+    color: var(--cyan);
+  }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    overflow: hidden;
+  }
+
+  .stat-item {
+    flex: 1;
+    max-width: 220px;
+    padding: 28px 32px;
+    border-right: 1px solid var(--border);
+    text-align: center;
+    transition: background 0.2s;
+  }
+
+  .stat-item:last-child { border-right: none; }
+  .stat-item:hover { background: var(--card); }
+
+  .stat-num {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 32px;
+    color: var(--cyan);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* ── SECTIONS ── */
+  section {
+    position: relative;
+    z-index: 1;
+    padding: 100px 48px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .section-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--blue);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .section-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(36px, 5vw, 56px);
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 48px;
+    color: var(--text);
+  }
+
+  /* ── FEATURES GRID ── */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+
+  .feature-card {
+    background: var(--card);
+    padding: 36px 32px;
+    transition: background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 0;
+    background: var(--cyan);
+    transition: height 0.3s ease;
+  }
+
+  .feature-card:hover { background: #111827; }
+  .feature-card:hover::before { height: 100%; }
+
+  .feature-icon {
+    font-size: 32px;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  .feature-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--text);
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+
+  .feature-desc {
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* ── DETECTION CLASSES ── */
+  .detection-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 48px;
+  }
+
+  .detection-card {
+    border: 1px solid var(--border);
+    padding: 32px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s;
+  }
+
+  .detection-card:hover { transform: translateY(-4px); }
+
+  .detection-card.fire { border-color: rgba(255,61,0,0.3); }
+  .detection-card.fire::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center bottom, rgba(255,61,0,0.08), transparent 70%);
+  }
+
+  .detection-card.accident { border-color: rgba(255,143,0,0.3); }
+  .detection-card.accident::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center bottom, rgba(255,143,0,0.08), transparent 70%);
+  }
+
+  .detection-card.normal { border-color: rgba(0,230,118,0.3); }
+  .detection-card.normal::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center bottom, rgba(0,230,118,0.08), transparent 70%);
+  }
+
+  .det-emoji { font-size: 48px; display: block; margin-bottom: 16px; }
+
+  .det-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+  }
+
+  .fire .det-label { color: var(--fire); }
+  .accident .det-label { color: var(--accident); }
+  .normal .det-label { color: var(--normal); }
+
+  .det-desc { font-size: 13px; color: var(--muted); }
+
+  /* ── TERMINAL / CODE BLOCK ── */
+  .terminal {
+    background: #020408;
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--cyan);
+    padding: 32px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    margin-top: 48px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .terminal::before {
+    content: '● ● ●';
+    position: absolute;
+    top: 12px; left: 16px;
+    color: var(--dim);
+    font-size: 10px;
+    letter-spacing: 4px;
+  }
+
+  .terminal-title {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 2px;
+  }
+
+  .t-prompt { color: var(--cyan); }
+  .t-cmd { color: var(--text); }
+  .t-comment { color: var(--dim); }
+  .t-success { color: var(--normal); }
+  .t-warn { color: var(--accident); }
+  .t-line { display: block; }
+
+  /* ── TECH STACK ── */
+  .tech-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 32px;
+  }
+
+  .tech-badge {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+
+  .tech-badge:hover {
+    border-color: var(--blue);
+    color: var(--cyan);
+    background: rgba(41,121,255,0.05);
+  }
+
+  /* ── ARCHITECTURE ── */
+  .arch-diagram {
+    display: grid;
+    grid-template-columns: 1fr 40px 1fr 40px 1fr;
+    align-items: center;
+    gap: 0;
+    margin-top: 48px;
+  }
+
+  .arch-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 24px 20px;
+    text-align: center;
+    position: relative;
+  }
+
+  .arch-box-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--cyan);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .arch-box-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .arch-arrow {
+    text-align: center;
+    color: var(--blue);
+    font-size: 20px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    position: relative;
+    z-index: 1;
+    border-top: 1px solid var(--border);
+    padding: 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 24px;
+    background: var(--panel);
+  }
+
+  .footer-brand {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 20px;
+    color: var(--text);
+    letter-spacing: 3px;
+  }
+
+  .footer-brand span { color: var(--cyan); }
+
+  .footer-links {
+    display: flex;
+    gap: 24px;
+    list-style: none;
+  }
+
+  .footer-links a {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-decoration: none;
+    letter-spacing: 1px;
+    transition: color 0.2s;
+  }
+
+  .footer-links a:hover { color: var(--cyan); }
+
+  .footer-copy {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── ALERT TICKER ── */
+  .ticker {
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+    overflow: hidden;
+    position: relative;
+    z-index: 1;
+  }
+
+  .ticker-inner {
+    display: flex;
+    gap: 64px;
+    animation: ticker-scroll 30s linear infinite;
+    white-space: nowrap;
+  }
+
+  .ticker-item {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .ticker-item .dot { margin-right: 8px; }
+  .ticker-item.fire-t .dot { color: var(--fire); }
+  .ticker-item.acc-t .dot { color: var(--accident); }
+  .ticker-item.ok-t .dot { color: var(--normal); }
+
+  @keyframes ticker-scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  /* ── MOBILE ── */
+  @media (max-width: 768px) {
+    nav { padding: 0 20px; }
+    .nav-links { display: none; }
+    section { padding: 60px 20px; }
+    .detection-row { grid-template-columns: 1fr; }
+    .arch-diagram { grid-template-columns: 1fr; }
+    .arch-arrow { transform: rotate(90deg); }
+    footer { padding: 32px 20px; flex-direction: column; align-items: flex-start; }
+    .stats-bar { flex-wrap: wrap; }
+    .stat-item { min-width: 50%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-brand">
+    <div class="nav-dot"></div>
+    VIGIL-88
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#detection">Detection</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#stack">Stack</a></li>
+  </ul>
+  <a href="https://github.com/YOUR_USERNAME/vigil-88" class="nav-cta" target="_blank">GitHub →</a>
+</nav>
+
+<!-- TICKER -->
+<div class="ticker" style="margin-top:64px;">
+  <div class="ticker-inner">
+    <span class="ticker-item fire-t"><span class="dot">🔴</span>FIRE DETECTION ACTIVE</span>
+    <span class="ticker-item acc-t"><span class="dot">🟡</span>ACCIDENT MONITORING</span>
+    <span class="ticker-item ok-t"><span class="dot">🟢</span>SCENE NORMAL</span>
+    <span class="ticker-item"><span class="dot">⚡</span>GPU ACCELERATED</span>
+    <span class="ticker-item"><span class="dot">📡</span>RTSP / WEBCAM / IMAGE</span>
+    <span class="ticker-item"><span class="dot">🧠</span>RESNET-18 · PYTORCH</span>
+    <span class="ticker-item fire-t"><span class="dot">🔴</span>FIRE DETECTION ACTIVE</span>
+    <span class="ticker-item acc-t"><span class="dot">🟡</span>ACCIDENT MONITORING</span>
+    <span class="ticker-item ok-t"><span class="dot">🟢</span>SCENE NORMAL</span>
+    <span class="ticker-item"><span class="dot">⚡</span>GPU ACCELERATED</span>
+    <span class="ticker-item"><span class="dot">📡</span>RTSP / WEBCAM / IMAGE</span>
+    <span class="ticker-item"><span class="dot">🧠</span>RESNET-18 · PYTORCH</span>
+  </div>
+</div>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-glow"></div>
+  <p class="hero-tag">⬤ &nbsp; AI-Powered Urban Monitoring System</p>
+  <h1 class="hero-title">
+    <span class="v">VIGIL</span><span class="num">-88</span>
+  </h1>
+  <p class="hero-subtitle">Real-Time Threat Detection Platform &nbsp;·&nbsp; v4.0</p>
+  <p class="hero-desc">
+    A production-grade desktop AI system that detects fires, accidents, and normal scenes in real-time from live webcams, RTSP camera streams, and uploaded images — powered by ResNet-18 on GPU.
+  </p>
+  <div class="hero-btns">
+    <a href="https://github.com/YOUR_USERNAME/vigil-88/releases" class="btn-primary" target="_blank">⬇ Download .exe</a>
+    <a href="https://github.com/YOUR_USERNAME/vigil-88" class="btn-secondary" target="_blank">View on GitHub</a>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-bar">
+  <div class="stat-item">
+    <span class="stat-num" data-target="95.8">0</span>
+    <span class="stat-label">Val Accuracy %</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-num">3</span>
+    <span class="stat-label">Threat Classes</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-num">30+</span>
+    <span class="stat-label">FPS Live</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-num">GPU</span>
+    <span class="stat-label">RTX 3050 Ready</span>
+  </div>
+  <div class="stat-item">
+    <span class="stat-num">v4.0</span>
+    <span class="stat-label">Latest Build</span>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section id="features">
+  <p class="section-tag reveal">// Core Capabilities</p>
+  <h2 class="section-title reveal">Built to Perform<br>Under Pressure</h2>
+  <div class="features-grid reveal">
+    <div class="feature-card">
+      <span class="feature-icon">🎥</span>
+      <div class="feature-title">Live Webcam + RTSP</div>
+      <div class="feature-desc">Connect any USB webcam or IP camera via RTSP URL. Real-time 30FPS inference with frame skipping for maximum performance.</div>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">⚡</span>
+      <div class="feature-title">GPU Accelerated</div>
+      <div class="feature-desc">Auto-detects CUDA GPU. Half-precision (FP16) inference on NVIDIA cards. CPU fallback when GPU is unavailable.</div>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">🧠</span>
+      <div class="feature-title">ResNet-18 Model</div>
+      <div class="feature-desc">Fine-tuned ResNet-18 with ImageNet pre-training. TorchScript export for fast loading. 95%+ accuracy on validation set.</div>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">🚨</span>
+      <div class="feature-title">Smart Alert System</div>
+      <div class="feature-desc">Debounced audio alerts on threat detection. Pulsing visual borders, animated badges, and real-time status indicators.</div>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">🎨</span>
+      <div class="feature-title">Premium UI</div>
+      <div class="feature-desc">Glassmorphism dashboard with animated confidence bars, shimmer effects, pulsing indicators, and smooth micro-interactions.</div>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">🏋️</span>
+      <div class="feature-title">Built-in Trainer</div>
+      <div class="feature-desc">Train directly from the GUI or CLI. Cosine LR scheduler, label smoothing, augmentation pipeline. Auto-loads best checkpoint.</div>
+    </div>
+  </div>
+</section>
+
+<!-- DETECTION CLASSES -->
+<section id="detection">
+  <p class="section-tag reveal">// Detection Output</p>
+  <h2 class="section-title reveal">Three Threat Classes</h2>
+  <div class="detection-row reveal">
+    <div class="detection-card fire">
+      <span class="det-emoji">🔥</span>
+      <div class="det-label">FIRE</div>
+      <div class="det-desc">Detects flames, smoke, and fire incidents. Red pulsing border + audio alert triggers immediately.</div>
+    </div>
+    <div class="detection-card accident">
+      <span class="det-emoji">⚠️</span>
+      <div class="det-label">ACCIDENT</div>
+      <div class="det-desc">Identifies road accidents, collisions, and crash scenes. Orange warning with sound notification.</div>
+    </div>
+    <div class="detection-card normal">
+      <span class="det-emoji">✅</span>
+      <div class="det-label">NORMAL</div>
+      <div class="det-desc">Scene classified as safe. Green status indicator. No alerts. Continuous monitoring active.</div>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section id="install">
+  <p class="section-tag reveal">// Quick Start</p>
+  <h2 class="section-title reveal">Up and Running<br>in 4 Commands</h2>
+  <div class="terminal reveal">
+    <span class="terminal-title">TERMINAL — VIGIL-88 SETUP</span>
+    <br><br>
+    <span class="t-line"><span class="t-comment"># 1. Clone the repository</span></span>
+    <span class="t-line"><span class="t-prompt">$ </span><span class="t-cmd">git clone https://github.com/YOUR_USERNAME/vigil-88.git</span></span>
+    <span class="t-line"><span class="t-prompt">$ </span><span class="t-cmd">cd vigil-88</span></span>
+    <br>
+    <span class="t-line"><span class="t-comment"># 2. Create virtual environment (Python 3.11)</span></span>
+    <span class="t-line"><span class="t-prompt">$ </span><span class="t-cmd">py -3.11 -m venv venv && venv\Scripts\activate</span></span>
+    <br>
+    <span class="t-line"><span class="t-comment"># 3. Install dependencies (GPU — CUDA 12.1)</span></span>
+    <span class="t-line"><span class="t-prompt">$ </span><span class="t-cmd">pip install torch==2.2.2 torchvision==0.17.2 --index-url https://download.pytorch.org/whl/cu121</span></span>
+    <span class="t-line"><span class="t-prompt">$ </span><span class="t-cmd">pip install PyQt6 opencv-python==4.8.1.78 Pillow "numpy&lt;2"</span></span>
+    <br>
+    <span class="t-line"><span class="t-comment"># 4. Train model + launch</span></span>
+    <span class="t-line"><span class="t-prompt">$ </span><span class="t-cmd">python train.py --dataset ./dataset --epochs 15</span></span>
+    <span class="t-line"><span class="t-prompt">$ </span><span class="t-cmd">python main_app.py</span></span>
+    <br>
+    <span class="t-line"><span class="t-success">✓  Model loaded on CUDA (NVIDIA GeForce RTX 3050 6GB Laptop GPU)</span></span>
+    <span class="t-line"><span class="t-success">✓  AI ENGINE READY — 95.8% validation accuracy</span></span>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section>
+  <p class="section-tag reveal">// System Architecture</p>
+  <h2 class="section-title reveal">How It Works</h2>
+  <div class="arch-diagram reveal">
+    <div class="arch-box">
+      <div class="arch-box-title">Input Sources</div>
+      <div class="arch-box-desc">Webcam · RTSP Stream · Image Upload</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box">
+      <div class="arch-box-title">Inference Engine</div>
+      <div class="arch-box-desc">ResNet-18 · TorchScript · GPU/CPU</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box">
+      <div class="arch-box-title">Output</div>
+      <div class="arch-box-desc">Label · Confidence · Alert · UI Update</div>
+    </div>
+  </div>
+</section>
+
+<!-- TECH STACK -->
+<section id="stack">
+  <p class="section-tag reveal">// Technology Stack</p>
+  <h2 class="section-title reveal">Built With</h2>
+  <div class="tech-grid reveal">
+    <span class="tech-badge">PyTorch 2.2</span>
+    <span class="tech-badge">ResNet-18</span>
+    <span class="tech-badge">TorchScript</span>
+    <span class="tech-badge">PyQt6</span>
+    <span class="tech-badge">OpenCV</span>
+    <span class="tech-badge">CUDA 12.1</span>
+    <span class="tech-badge">Python 3.11</span>
+    <span class="tech-badge">torchvision</span>
+    <span class="tech-badge">NumPy</span>
+    <span class="tech-badge">Pillow</span>
+    <span class="tech-badge">PyInstaller</span>
+    <span class="tech-badge">FFmpeg</span>
+    <span class="tech-badge">RTSP</span>
+    <span class="tech-badge">Windows 11</span>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-brand">VIGIL<span>-88</span></div>
+  <ul class="footer-links">
+    <li><a href="https://github.com/YOUR_USERNAME/vigil-88" target="_blank">GitHub</a></li>
+    <li><a href="https://github.com/YOUR_USERNAME/vigil-88/releases" target="_blank">Releases</a></li>
+    <li><a href="https://github.com/YOUR_USERNAME/vigil-88/issues" target="_blank">Issues</a></li>
+  </ul>
+  <p class="footer-copy">Built for hackathon · Vigil-88 v4.0 · 2026</p>
+</footer>
+
+<script>
+  // Scroll reveal
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        setTimeout(() => e.target.classList.add('visible'), i * 80);
+      }
+    });
+  }, { threshold: 0.1 });
+  reveals.forEach(r => observer.observe(r));
+
+  // Animated stat counter
+  const counters = document.querySelectorAll('[data-target]');
+  counters.forEach(counter => {
+    const target = parseFloat(counter.dataset.target);
+    const duration = 2000;
+    const step = target / (duration / 16);
+    let current = 0;
+    const timer = setInterval(() => {
+      current += step;
+      if (current >= target) {
+        counter.textContent = target;
+        clearInterval(timer);
+      } else {
+        counter.textContent = current.toFixed(1);
+      }
+    }, 16);
+  });
+</script>
+
+</body>
+</html>
